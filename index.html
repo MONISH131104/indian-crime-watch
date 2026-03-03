@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrimeWatch India</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07080d;
+  --s1: #0e1018;
+  --s2: #161822;
+  --s3: #1e2030;
+  --s4: #262840;
+  --acc: #e84855;
+  --acc2: #f9844a;
+  --blue: #4361ee;
+  --cyan: #4cc9f0;
+  --green: #06d6a0;
+  --yellow: #ffd166;
+  --purple: #7b2d8b;
+  --text: #f0f2ff;
+  --muted: #6b7280;
+  --dim: #9ca3af;
+  --bdr: rgba(255,255,255,0.06);
+  --acc-glow: rgba(232,72,85,0.15);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;display:flex;flex-direction:column;}
+
+/* ── APP SHELL ── */
+.app-shell{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* ── TOP BAR ── */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 2rem;height:56px;flex-shrink:0;
+  background:rgba(7,8,13,0.95);
+  border-bottom:1px solid var(--bdr);
+  backdrop-filter:blur(20px);
+  position:relative;z-index:100;
+}
+.logo{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:800;letter-spacing:0.05em;display:flex;align-items:center;gap:0.5rem;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc);}
+.logo span{color:var(--acc);}
+.topbar-right{display:flex;align-items:center;gap:1.5rem;}
+.live-pill{display:flex;align-items:center;gap:0.4rem;background:rgba(232,72,85,0.12);border:1px solid rgba(232,72,85,0.3);border-radius:20px;padding:0.25rem 0.7rem;font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--acc);letter-spacing:0.08em;}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--acc);animation:livepulse 1.5s ease-in-out infinite;}
+@keyframes livepulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+.topbar-stat{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--muted);}
+.topbar-stat span{color:var(--text);}
+
+/* ── TAB NAV ── */
+.tabnav{
+  display:flex;align-items:stretch;
+  background:var(--s1);
+  border-bottom:1px solid var(--bdr);
+  flex-shrink:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.tabnav::-webkit-scrollbar{display:none;}
+.tabitem{
+  display:flex;align-items:center;gap:0.5rem;
+  padding:0 1.5rem;height:46px;
+  font-family:'JetBrains Mono',monospace;font-size:0.72rem;
+  letter-spacing:0.05em;text-transform:uppercase;
+  color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;
+  white-space:nowrap;transition:all 0.2s;
+  flex-shrink:0;
+}
+.tabitem:hover{color:var(--dim);background:rgba(255,255,255,0.02);}
+.tabitem.active{color:var(--text);border-bottom-color:var(--acc);}
+.tab-icon{font-size:0.9rem;}
+.tab-count{background:var(--s3);color:var(--muted);border-radius:10px;padding:0.05rem 0.4rem;font-size:0.6rem;}
+.tabitem.active .tab-count{background:var(--acc);color:white;}
+
+/* ── TICKER ── */
+.ticker{height:28px;background:rgba(232,72,85,0.05);border-bottom:1px solid var(--bdr);overflow:hidden;display:flex;align-items:center;flex-shrink:0;}
+.ticker-label{background:var(--acc);color:white;font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:0 0.75rem;height:100%;display:flex;align-items:center;flex-shrink:0;letter-spacing:0.08em;}
+.ticker-scroll{flex:1;overflow:hidden;position:relative;}
+.ticker-inner{display:flex;gap:3rem;animation:tick 50s linear infinite;white-space:nowrap;}
+.ticker-inner:hover{animation-play-state:paused;}
+@keyframes tick{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+.tick-item{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);display:flex;align-items:center;gap:0.4rem;}
+.tick-sep{color:var(--acc);opacity:0.4;}
+
+/* ── CONTENT AREA ── */
+.content{flex:1;overflow:hidden;position:relative;}
+.tabpanel{position:absolute;inset:0;overflow-y:auto;display:none;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;}
+.tabpanel::-webkit-scrollbar{width:4px;}.tabpanel::-webkit-scrollbar-thumb{background:var(--s3);border-radius:2px;}
+.tabpanel.active{display:block;}
+.panel-inner{padding:1.75rem 2rem;max-width:1600px;margin:0 auto;}
+
+/* ── SECTION LABEL ── */
+.sec-label{font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--acc);margin-bottom:0.4rem;}
+.sec-title{font-family:'Syne',sans-serif;font-size:1.6rem;font-weight:700;margin-bottom:1.5rem;line-height:1.2;}
+.sec-title span{color:var(--acc);}
+
+/* ── STAT CARDS (redesigned) ── */
+.srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem;}
+.scard{
+  background:var(--s1);border:1px solid var(--bdr);border-radius:10px;
+  padding:1.25rem 1.25rem 1rem;
+  position:relative;overflow:hidden;
+  transition:all 0.25s;
+}
+.scard:hover{border-color:rgba(255,255,255,0.12);transform:translateY(-2px);}
+.scard-accent{position:absolute;top:0;right:0;width:60px;height:60px;border-radius:50%;transform:translate(20px,-20px);opacity:0.08;}
+.scard-lbl{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:0.6rem;}
+/* BIG CHANGE: % is hero, raw is small */
+.scard-pct{font-family:'Syne',sans-serif;font-size:2.6rem;font-weight:800;line-height:1;margin-bottom:0.25rem;display:flex;align-items:baseline;gap:0.25rem;}
+.scard-pct .arrow{font-size:1.4rem;}
+.scard-raw{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--muted);margin-bottom:0.5rem;}
+.scard-raw strong{color:var(--dim);}
+.scard-bar{height:3px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.scard-bar-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+.up{color:var(--acc);}.down{color:var(--green);}.neutral{color:var(--yellow);}
+
+/* ── CHART GRID ── */
+.cgrid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:1rem;margin-bottom:1rem;}
+.cgrid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin-bottom:1rem;}
+.cbox{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1.25rem;}
+.cbox-title{font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:600;margin-bottom:0.2rem;}
+.cbox-sub{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);letter-spacing:0.06em;margin-bottom:1rem;}
+
+/* ── MAP TAB ── */
+.map-shell{display:grid;grid-template-columns:1fr 300px;gap:1rem;height:calc(100vh - 180px);}
+#leaflet-map{border-radius:10px;border:1px solid var(--bdr);height:100%;}
+.map-right{display:flex;flex-direction:column;gap:1rem;height:100%;overflow-y:auto;}
+.leaflet-container{background:var(--bg) !important;}
+.leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(0.65) saturate(0.45);}
+.leaflet-popup-content-wrapper{background:var(--s2);border:1px solid var(--bdr);border-radius:10px;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+.leaflet-popup-tip{background:var(--s2);}
+.pp-name{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:0.2rem;}
+.pp-state{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.6rem;}
+.pp-badge{display:inline-block;padding:0.15rem 0.5rem;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;margin-bottom:0.6rem;}
+.pp-rows{display:flex;flex-direction:column;gap:0.25rem;}
+.pp-row{display:flex;justify-content:space-between;font-size:0.78rem;padding:0.18rem 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.pp-row span:last-child{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--cyan);}
+.pp-btn{margin-top:0.75rem;width:100%;background:rgba(232,72,85,0.1);border:1px solid rgba(232,72,85,0.3);color:var(--acc);font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:0.4rem;cursor:pointer;border-radius:6px;transition:all 0.2s;letter-spacing:0.05em;}
+.pp-btn:hover{background:rgba(232,72,85,0.2);}
+.mcard{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1rem;}
+.mcard-title{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--acc);letter-spacing:0.1em;margin-bottom:0.75rem;text-transform:uppercase;}
+.srank{display:flex;flex-direction:column;gap:0.3rem;max-height:200px;overflow-y:auto;}
+.srank::-webkit-scrollbar{width:3px;}.srank::-webkit-scrollbar-thumb{background:var(--s3);}
+.sr-item{display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0.4rem;border-radius:6px;cursor:pointer;transition:background 0.2s;font-size:0.78rem;}
+.sr-item:hover{background:var(--s2);}
+.sr-num{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);width:16px;}
+.sr-name{flex:1;}
+.sr-bar{width:60px;height:3px;background:var(--s3);border-radius:2px;overflow:hidden;flex-shrink:0;}
+.sr-fill{height:100%;border-radius:2px;}
+.detail-panel{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1rem;flex:1;}
+.dp-name{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;margin-bottom:0.15rem;}
+.dp-sub{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.75rem;}
+.dp-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem;}
+.dp-stat{background:var(--s2);border-radius:6px;padding:0.65rem;}
+.dp-sv{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:700;}
+.dp-sl{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted);margin-top:0.1rem;}
+.dp-comment{font-size:0.76rem;color:var(--dim);line-height:1.55;}
+.map-legend{display:flex;gap:1rem;flex-wrap:wrap;padding:0.6rem 1rem;background:var(--s1);border:1px solid var(--bdr);border-radius:8px;}
+.ml-item{display:flex;align-items:center;gap:0.35rem;font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);}
+.ml-dot{width:8px;height:8px;border-radius:50%;}
+
+/* ── DRILLDOWN TAB ── */
+.dd-top{display:flex;gap:0.75rem;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;}
+.dd-input{flex:1;min-width:220px;background:var(--s1);border:1px solid var(--bdr);border-radius:8px;padding:0.6rem 1rem;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:0.88rem;outline:none;transition:border-color 0.2s;}
+.dd-input:focus{border-color:rgba(232,72,85,0.4);}
+.dd-input::placeholder{color:var(--muted);}
+.dd-btn{background:rgba(232,72,85,0.08);border:1px solid rgba(232,72,85,0.2);border-radius:8px;color:var(--acc);font-family:'JetBrains Mono',monospace;font-size:0.68rem;padding:0.55rem 1rem;cursor:pointer;transition:all 0.2s;letter-spacing:0.05em;}
+.dd-btn:hover{background:rgba(232,72,85,0.18);}
+.stabs{display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:1.25rem;}
+.stab{background:var(--s1);border:1px solid var(--bdr);border-radius:6px;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s;}
+.stab:hover{border-color:rgba(255,255,255,0.1);color:var(--dim);}
+.stab.active{background:rgba(232,72,85,0.1);border-color:rgba(232,72,85,0.35);color:var(--acc);}
+.city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;}
+.ccard{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1.1rem;position:relative;cursor:pointer;transition:all 0.25s;overflow:hidden;}
+.ccard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;opacity:0;transition:opacity 0.2s;}
+.ccard:hover{transform:translateY(-3px);border-color:rgba(255,255,255,0.1);box-shadow:0 12px 40px rgba(0,0,0,0.3);}
+.ccard:hover::before{opacity:1;}
+.rbadge{position:absolute;top:0.75rem;right:0.75rem;padding:0.12rem 0.45rem;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;}
+.rc{background:rgba(232,72,85,0.12);color:var(--acc);border:1px solid rgba(232,72,85,0.3);}
+.rh{background:rgba(249,132,74,0.12);color:var(--acc2);border:1px solid rgba(249,132,74,0.3);}
+.rm{background:rgba(255,209,102,0.1);color:var(--yellow);border:1px solid rgba(255,209,102,0.25);}
+.rl{background:rgba(6,214,160,0.1);color:var(--green);border:1px solid rgba(6,214,160,0.25);}
+.cname{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:700;margin-bottom:0.15rem;}
+.cstate{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);margin-bottom:0.75rem;}
+/* City card stat: % big, raw small */
+.cstat-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;}
+.cstat-name{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;width:70px;}
+.cstat-pct{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;}
+.cstat-raw{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted);}
+.mbar-wrap{flex:1;margin:0 0.5rem;height:4px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.mbar-fill{height:100%;border-radius:2px;transition:width 0.8s ease;}
+.ccomment{font-size:0.74rem;color:var(--muted);line-height:1.5;margin-top:0.65rem;border-top:1px solid var(--bdr);padding-top:0.65rem;}
+.click-hint{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);opacity:0.5;margin-top:0.5rem;}
+
+/* ── AREA MODAL ── */
+.modal-bg{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);}
+.modal-bg.open{display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:2rem;}
+.modal-box{background:var(--s1);border:1px solid var(--bdr);border-radius:14px;width:100%;max-width:1100px;padding:2rem;position:relative;margin:auto;}
+.modal-close{position:absolute;top:1rem;right:1rem;background:var(--s2);border:1px solid var(--bdr);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.68rem;padding:0.3rem 0.7rem;cursor:pointer;border-radius:6px;transition:all 0.2s;}
+.modal-close:hover{color:var(--text);border-color:rgba(255,255,255,0.12);}
+.modal-city{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;margin-bottom:0.2rem;}
+.modal-sub{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:1.5rem;}
+.modal-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:0.75rem;margin-bottom:1.75rem;}
+.ms-box{background:var(--s2);border-radius:8px;padding:0.9rem;}
+.ms-pct{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800;line-height:1;}
+.ms-raw{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);margin-top:0.2rem;}
+.ms-lbl{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.25rem;}
+.area-section-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--acc);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;}
+.area-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.85rem;}
+.azone{background:var(--s2);border:1px solid var(--bdr);border-radius:8px;padding:1rem;position:relative;transition:border-color 0.2s;}
+.azone:hover{border-color:rgba(255,255,255,0.1);}
+.az-name{font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:600;margin-bottom:0.1rem;}
+.az-meta{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);margin-bottom:0.65rem;}
+.az-bar-row{display:flex;align-items:center;gap:0.4rem;margin-bottom:0.28rem;}
+.az-lbl{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted);width:60px;text-transform:uppercase;}
+.az-track{flex:1;height:4px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.az-fill{height:100%;border-radius:2px;}
+.az-val{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);width:35px;text-align:right;}
+.az-comment{font-size:0.72rem;color:var(--muted);line-height:1.5;margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--bdr);}
+
+/* ── NEWS TAB ── */
+.news-shell{display:grid;grid-template-columns:1fr 280px;gap:1rem;}
+.news-list{display:flex;flex-direction:column;gap:0.75rem;}
+.ncard{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;display:flex;cursor:pointer;transition:all 0.25s;}
+.ncard:hover{border-color:rgba(255,255,255,0.1);transform:translateX(3px);}
+.nthumb{width:120px;min-width:120px;position:relative;overflow:hidden;background:var(--s2);}
+.nthumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform 0.3s;}
+.ncard:hover .nthumb img{transform:scale(1.05);}
+.nthumb-fb{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.8rem;}
+.nbody{padding:0.9rem;flex:1;}
+.nbody-top{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.45rem;flex-wrap:wrap;}
+.nstatus{font-family:'JetBrains Mono',monospace;font-size:0.58rem;padding:0.1rem 0.45rem;border-radius:20px;letter-spacing:0.06em;}
+.ns-confirmed{background:rgba(6,214,160,0.1);color:var(--green);border:1px solid rgba(6,214,160,0.25);}
+.ns-unconfirmed{background:rgba(255,209,102,0.1);color:var(--yellow);border:1px solid rgba(255,209,102,0.25);}
+.ns-developing{background:rgba(76,201,240,0.1);color:var(--cyan);border:1px solid rgba(76,201,240,0.25);}
+.nsrc{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--muted);}
+.ntitle{font-family:'Syne',sans-serif;font-size:0.88rem;font-weight:600;line-height:1.4;margin-bottom:0.3rem;}
+.nmeta{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);margin-bottom:0.3rem;}
+.ndesc{font-size:0.76rem;color:var(--dim);line-height:1.5;}
+.ntags{display:flex;gap:0.3rem;flex-wrap:wrap;margin-top:0.45rem;}
+.ntag{background:var(--s2);border-radius:4px;padding:0.08rem 0.35rem;font-size:0.6rem;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.news-sidebar{display:flex;flex-direction:column;gap:0.75rem;}
+.nbox{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1rem;}
+.nbox-title{font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--acc);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.75rem;}
+.chipset{display:flex;flex-wrap:wrap;gap:0.3rem;}
+.chip{background:var(--s2);border:1px solid var(--bdr);border-radius:6px;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.6rem;padding:0.25rem 0.5rem;cursor:pointer;transition:all 0.2s;}
+.chip:hover,.chip.active{background:rgba(232,72,85,0.1);border-color:rgba(232,72,85,0.3);color:var(--acc);}
+.src-link{display:flex;align-items:center;gap:0.5rem;color:var(--muted);text-decoration:none;font-size:0.76rem;padding:0.45rem 0;border-bottom:1px solid var(--bdr);transition:color 0.2s;}
+.src-link:last-child{border:none;padding-bottom:0;}
+.src-link:hover{color:var(--text);}
+.src-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+
+/* ── STREAMS TAB ── */
+.streams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;}
+.scard-tv{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;overflow:hidden;cursor:pointer;text-decoration:none;display:block;transition:all 0.25s;}
+.scard-tv:hover{border-color:rgba(255,255,255,0.1);transform:translateY(-4px);box-shadow:0 16px 48px rgba(0,0,0,0.35);}
+.sthumb{position:relative;padding-bottom:56.25%;background:var(--s2);overflow:hidden;}
+.sthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform 0.3s;}
+.scard-tv:hover .sthumb img{transform:scale(1.04);}
+.splay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);}
+.splay-btn{width:52px;height:52px;background:var(--acc);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.25s;box-shadow:0 0 30px rgba(232,72,85,0.4);}
+.scard-tv:hover .splay-btn{transform:scale(1.12);box-shadow:0 0 40px rgba(232,72,85,0.6);}
+.splay-icon{width:0;height:0;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent #fff;margin-left:3px;}
+.slive{position:absolute;top:0.65rem;left:0.65rem;background:var(--acc);color:white;font-family:'JetBrains Mono',monospace;font-size:0.58rem;padding:0.18rem 0.45rem;border-radius:20px;display:flex;align-items:center;gap:0.3rem;}
+.sbody{padding:0.9rem 1rem;}
+.sname{font-family:'Syne',sans-serif;font-size:1.05rem;font-weight:700;margin-bottom:0.25rem;}
+.sdesc{font-size:0.76rem;color:var(--dim);line-height:1.5;margin-bottom:0.5rem;}
+.smeta{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:0.35rem;}
+
+/* ── ANALYSIS TAB ── */
+.insight-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem;margin-bottom:1rem;}
+.icard{background:var(--s1);border:1px solid var(--bdr);border-radius:10px;padding:1.25rem;}
+.icard-head{display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;}
+.icard-icon{font-size:1.1rem;}
+.icard-title{font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;}
+.finding{display:flex;gap:0.6rem;margin-bottom:0.65rem;padding-bottom:0.65rem;border-bottom:1px solid var(--bdr);}
+.finding:last-child{border:none;margin:0;padding:0;}
+.ficon{font-size:0.95rem;flex-shrink:0;margin-top:0.1rem;}
+.ftext{font-size:0.79rem;color:var(--dim);line-height:1.6;}
+.ftext strong{color:var(--text);}
+
+/* ── LOADING ── */
+.ld{display:flex;align-items:center;gap:0.5rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--muted);margin-bottom:1rem;}
+.ld-dot{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:ld 1.4s ease-in-out infinite;}
+.ld-dot:nth-child(2){animation-delay:.2s;}.ld-dot:nth-child(3){animation-delay:.4s;}
+@keyframes ld{0%,80%,100%{transform:scale(0);opacity:.3;}40%{transform:scale(1);opacity:1;}}
+
+/* ── FOOTER STATUS BAR ── */
+.statusbar{height:26px;background:var(--s1);border-top:1px solid var(--bdr);display:flex;align-items:center;padding:0 2rem;gap:2rem;flex-shrink:0;}
+.sb-item{font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);display:flex;align-items:center;gap:0.35rem;}
+.sb-item span{color:var(--dim);}
+.sb-dot{width:5px;height:5px;border-radius:50%;}
+
+@media(max-width:900px){
+  .map-shell,.news-shell{grid-template-columns:1fr;}
+  .cgrid2{grid-template-columns:1fr;}
+  .topbar-stat{display:none;}
+  .tabitem{padding:0 1rem;}
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo"><div class="logo-dot"></div>CRIME<span>WATCH</span> INDIA</div>
+  <div class="topbar-right">
+    <div class="topbar-stat">IPC 2022: <span>58.24L cases</span></div>
+    <div class="topbar-stat">Cyber: <span>+24.4% YoY</span></div>
+    <div class="topbar-stat" id="clockEl"></div>
+    <div class="live-pill"><div class="live-dot"></div>LIVE</div>
+  </div>
+</div>
+
+<!-- TAB NAV -->
+<div class="tabnav">
+  <div class="tabitem active" onclick="switchTab('overview',this)"><span class="tab-icon">📊</span>Overview<span class="tab-count">6</span></div>
+  <div class="tabitem" onclick="switchTab('map',this)"><span class="tab-icon">🗺️</span>Live Map</div>
+  <div class="tabitem" onclick="switchTab('drilldown',this)"><span class="tab-icon">🏙️</span>State / City<span class="tab-count">12</span></div>
+  <div class="tabitem" onclick="switchTab('news',this)"><span class="tab-icon">📰</span>Live News<span class="tab-count">12</span></div>
+  <div class="tabitem" onclick="switchTab('streams',this)"><span class="tab-icon">📺</span>Live TV<span class="tab-count">4</span></div>
+  <div class="tabitem" onclick="switchTab('analysis',this)"><span class="tab-icon">🔍</span>Analysis</div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-label">BREAKING</div>
+  <div class="ticker-scroll">
+    <div class="ticker-inner">
+      <span class="tick-item">UP leads India — 6.88L IPC cases (11.8% of national total)<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Cyber crime +24.4% nationally in 2023 · Jamtara & Mewat confirmed hubs<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Delhi NCR: 28,000+ cyber fraud cases — highest metro in India<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Rajasthan: 40,738 crimes vs women — highest state (NCRB 2022)<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Mumbai: Organised crime & cyber fraud surge 2024<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Chandigarh & Thiruvananthapuram: safest metros by crime per lakh<span class="tick-sep">◆</span></span>
+      <span class="tick-item">AI-powered scams: deepfake fraud cases up 180% in H1 2024<span class="tick-sep">◆</span></span>
+      <span class="tick-item">UP leads India — 6.88L IPC cases (11.8% of national total)<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Cyber crime +24.4% nationally in 2023 · Jamtara & Mewat confirmed hubs<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Delhi NCR: 28,000+ cyber fraud cases — highest metro in India<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Rajasthan: 40,738 crimes vs women — highest state (NCRB 2022)<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Mumbai: Organised crime & cyber fraud surge 2024<span class="tick-sep">◆</span></span>
+      <span class="tick-item">Chandigarh & Thiruvananthapuram: safest metros by crime per lakh<span class="tick-sep">◆</span></span>
+      <span class="tick-item">AI-powered scams: deepfake fraud cases up 180% in H1 2024<span class="tick-sep">◆</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT PANELS -->
+<div class="content">
+
+<!-- ═══════════ TAB 1: OVERVIEW ═══════════ -->
+<div class="tabpanel active" id="panel-overview">
+<div class="panel-inner">
+  <div class="sec-label">National Snapshot · NCRB 2022 + 2023 Projections</div>
+  <div class="sec-title">India Crime <span>At A Glance</span></div>
+
+  <!-- Stat cards: % hero, raw small -->
+  <div class="srow">
+    <div class="scard" style="--ac:#e84855;">
+      <div class="scard-accent" style="background:var(--acc);"></div>
+      <div class="scard-lbl">Total IPC Cases</div>
+      <div class="scard-pct"><span class="arrow up">↑</span><span class="up">+4.2%</span></div>
+      <div class="scard-raw">vs 2021 · <strong>58.24 lakh</strong> cases</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:82%;background:var(--acc);"></div></div>
+    </div>
+    <div class="scard">
+      <div class="scard-accent" style="background:var(--cyan);"></div>
+      <div class="scard-lbl">Cyber Crimes</div>
+      <div class="scard-pct"><span class="arrow up">↑</span><span style="color:var(--cyan)">+24.4%</span></div>
+      <div class="scard-raw">vs 2022 · <strong>15.92 lakh</strong> cases (est.)</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:94%;background:var(--cyan);"></div></div>
+    </div>
+    <div class="scard">
+      <div class="scard-accent" style="background:var(--yellow);"></div>
+      <div class="scard-lbl">Crimes vs Women</div>
+      <div class="scard-pct"><span class="arrow up">↑</span><span style="color:var(--yellow)">+4.0%</span></div>
+      <div class="scard-raw">vs 2021 · <strong>4.45 lakh</strong> cases</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:58%;background:var(--yellow);"></div></div>
+    </div>
+    <div class="scard">
+      <div class="scard-accent" style="background:var(--green);"></div>
+      <div class="scard-lbl">Charge Sheet Rate</div>
+      <div class="scard-pct"><span class="arrow down">↓</span><span class="down">−1.2%</span></div>
+      <div class="scard-raw">from 2021 · <strong>76.4%</strong> filed</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:76%;background:var(--green);"></div></div>
+    </div>
+    <div class="scard">
+      <div class="scard-accent" style="background:#7b2d8b;"></div>
+      <div class="scard-lbl">Murder Cases</div>
+      <div class="scard-pct"><span class="arrow down">↓</span><span class="down">−0.6%</span></div>
+      <div class="scard-raw">vs 2021 · <strong>28,522</strong> registered</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:38%;background:#7b2d8b;"></div></div>
+    </div>
+    <div class="scard">
+      <div class="scard-accent" style="background:var(--acc2);"></div>
+      <div class="scard-lbl">Kidnapping</div>
+      <div class="scard-pct"><span class="arrow up">↑</span><span style="color:var(--acc2)">+7.1%</span></div>
+      <div class="scard-raw">vs 2021 · <strong>1.08 lakh</strong> cases</div>
+      <div class="scard-bar"><div class="scard-bar-fill" style="width:62%;background:var(--acc2);"></div></div>
+    </div>
+  </div>
+
+  <div class="cgrid2">
+    <div class="cbox"><div class="cbox-title">National Crime Trend 2014–2023</div><div class="cbox-sub">IPC CASES VS CYBER CRIMES (LAKHS) · *2023 PROJECTED</div><canvas id="natTrend" height="170"></canvas></div>
+    <div class="cbox"><div class="cbox-title">Crime Type Breakdown 2022</div><div class="cbox-sub">PROPORTION OF MAJOR CATEGORIES · NCRB 2022</div><canvas id="natBreak" height="170"></canvas></div>
+  </div>
+  <div class="cgrid3">
+    <div class="cbox"><div class="cbox-title">Crimes Against Women</div><div class="cbox-sub">TREND 2014–2022 · THOUSANDS</div><canvas id="womenC" height="180"></canvas></div>
+    <div class="cbox"><div class="cbox-title">Violent Crime Trend</div><div class="cbox-sub">MURDER · ROBBERY · KIDNAPPING</div><canvas id="violentC" height="180"></canvas></div>
+    <div class="cbox"><div class="cbox-title">Cyber Crime Explosion</div><div class="cbox-sub">REGISTERED CASES · THOUSANDS</div><canvas id="cyberC" height="180"></canvas></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ TAB 2: MAP ═══════════ -->
+<div class="tabpanel" id="panel-map">
+<div class="panel-inner" style="padding-bottom:0.5rem;">
+  <div class="sec-label">Zoomable Interactive Map</div>
+  <div class="sec-title" style="margin-bottom:1rem;">Crime <span>Hotspot Map</span></div>
+  <div class="map-shell">
+    <div style="display:flex;flex-direction:column;gap:0.75rem;">
+      <div id="leaflet-map"></div>
+      <div class="map-legend">
+        <span class="ml-item"><span class="ml-dot" style="background:#e84855;box-shadow:0 0 8px #e8485566;"></span>CRITICAL</span>
+        <span class="ml-item"><span class="ml-dot" style="background:#f9844a;box-shadow:0 0 8px #f9844a66;"></span>HIGH</span>
+        <span class="ml-item"><span class="ml-dot" style="background:#ffd166;box-shadow:0 0 8px #ffd16666;"></span>MEDIUM</span>
+        <span class="ml-item"><span class="ml-dot" style="background:#06d6a0;box-shadow:0 0 8px #06d6a066;"></span>LOW</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--muted);margin-left:auto;">Scroll to zoom · Click markers</span>
+      </div>
+    </div>
+    <div class="map-right">
+      <div class="mcard">
+        <div class="mcard-title">State Crime Rank</div>
+        <div class="srank" id="stateRankEl"></div>
+      </div>
+      <div class="detail-panel" id="detailPanel">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--muted);text-align:center;padding:1rem 0;">← Click a marker to see city details</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ TAB 3: DRILLDOWN ═══════════ -->
+<div class="tabpanel" id="panel-drilldown">
+<div class="panel-inner">
+  <div class="sec-label">State → City → Area breakdown</div>
+  <div class="sec-title" style="margin-bottom:1rem;">State & City <span>Drilldown</span></div>
+  <div class="cbox" style="margin-bottom:1rem;">
+    <div class="cbox-title">Top 15 States — IPC Crime Volume (2022)</div>
+    <div class="cbox-sub">NCRB 2022 · COLOR = RISK LEVEL · CLICK BARS TO FILTER BELOW</div>
+    <canvas id="stateRanking" height="160"></canvas>
+  </div>
+  <div class="dd-top">
+    <input type="text" class="dd-input" id="citySearch" placeholder="Search city or state...">
+    <button class="dd-btn" onclick="doSearch()">SEARCH</button>
+    <button class="dd-btn" onclick="resetDD()">RESET</button>
+  </div>
+  <div class="stabs" id="stateTabs"></div>
+  <div class="city-grid" id="cityGrid"></div>
+</div>
+</div>
+
+<!-- ═══════════ TAB 4: NEWS ═══════════ -->
+<div class="tabpanel" id="panel-news">
+<div class="panel-inner">
+  <div class="sec-label">Curated · NDTV · TOI · Indian Express · The Hindu · HT</div>
+  <div class="sec-title" style="margin-bottom:1rem;">Live Crime <span>News Feed</span></div>
+  <div class="news-shell">
+    <div>
+      <div class="ld" id="newsLoading"><div class="ld-dot"></div><div class="ld-dot"></div><div class="ld-dot"></div><span>Loading news feed...</span></div>
+      <div class="news-list" id="newsFeed"></div>
+      <div style="margin-top:1rem;display:flex;align-items:center;gap:1rem;">
+        <button class="dd-btn" onclick="loadNews()">↻ Refresh</button>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--muted);" id="newsTs"></span>
+      </div>
+    </div>
+    <div class="news-sidebar">
+      <div class="nbox">
+        <div class="nbox-title">Filter by Type</div>
+        <div class="chipset" id="typeChips">
+          <span class="chip active" onclick="setTF('all',this)">All</span>
+          <span class="chip" onclick="setTF('murder',this)">Murder</span>
+          <span class="chip" onclick="setTF('robbery',this)">Robbery</span>
+          <span class="chip" onclick="setTF('cyber',this)">Cyber</span>
+          <span class="chip" onclick="setTF('women',this)">Women</span>
+          <span class="chip" onclick="setTF('kidnapping',this)">Kidnapping</span>
+          <span class="chip" onclick="setTF('drugs',this)">Drugs</span>
+          <span class="chip" onclick="setTF('terrorism',this)">Terrorism</span>
+        </div>
+      </div>
+      <div class="nbox">
+        <div class="nbox-title">Filter by Region</div>
+        <div class="chipset" id="regChips">
+          <span class="chip active" onclick="setRF('all',this)">All India</span>
+          <span class="chip" onclick="setRF('delhi',this)">Delhi</span>
+          <span class="chip" onclick="setRF('mumbai',this)">Mumbai</span>
+          <span class="chip" onclick="setRF('up',this)">UP</span>
+          <span class="chip" onclick="setRF('bengaluru',this)">Bengaluru</span>
+          <span class="chip" onclick="setRF('chennai',this)">Chennai</span>
+          <span class="chip" onclick="setRF('kolkata',this)">Kolkata</span>
+        </div>
+      </div>
+      <div class="nbox">
+        <div class="nbox-title">Read Directly</div>
+        <a class="src-link" href="https://www.ndtv.com/topic/crime" target="_blank"><span class="src-dot" style="background:var(--acc);"></span>NDTV Crime</a>
+        <a class="src-link" href="https://timesofindia.indiatimes.com/topic/crime" target="_blank"><span class="src-dot" style="background:var(--acc2);"></span>Times of India</a>
+        <a class="src-link" href="https://indianexpress.com/section/cities/delhi/crime/" target="_blank"><span class="src-dot" style="background:var(--cyan);"></span>Indian Express</a>
+        <a class="src-link" href="https://www.thehindu.com/news/national/" target="_blank"><span class="src-dot" style="background:var(--green);"></span>The Hindu</a>
+        <a class="src-link" href="https://www.hindustantimes.com/topic/crime" target="_blank"><span class="src-dot" style="background:var(--yellow);"></span>Hindustan Times</a>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ TAB 5: STREAMS ═══════════ -->
+<div class="tabpanel" id="panel-streams">
+<div class="panel-inner">
+  <div class="sec-label">24/7 Live News Channels</div>
+  <div class="sec-title" style="margin-bottom:0.5rem;">Live <span>News Streams</span></div>
+  <p style="font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:1.5rem;">YouTube restricts embedded live streams. Click any card to open the channel live on YouTube in a new tab.</p>
+  <div class="streams-grid">
+    <a class="scard-tv" href="https://www.youtube.com/@NDTVIndia/streams" target="_blank">
+      <div class="sthumb">
+        <img src="https://yt3.googleusercontent.com/ytc/AIdro_mBRIPMBo-TKLlvLNx7V7d65K0_Y3HEpK4LxIQx1s4=s900-c-k-c0x00ffffff-no-rj" alt="NDTV" onerror="this.style.display='none'">
+        <div class="splay"><div class="splay-btn"><div class="splay-icon"></div></div></div>
+        <div class="slive"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <div class="sbody">
+        <div class="sname">NDTV 24x7</div>
+        <div class="sdesc">India's leading English news. Breaking crime news, investigations, and special reports nationwide.</div>
+        <div class="smeta"><div class="live-dot"></div>Live on YouTube · Click to watch</div>
+      </div>
+    </a>
+    <a class="scard-tv" href="https://www.youtube.com/@TimesNow/streams" target="_blank">
+      <div class="sthumb">
+        <img src="https://yt3.googleusercontent.com/ytc/AIdro_n5kaTdYnFhHPwmGzOkm_UtNJMfg1jjlUMwPX4Euw=s900-c-k-c0x00ffffff-no-rj" alt="Times Now" onerror="this.style.display='none'">
+        <div class="splay"><div class="splay-btn"><div class="splay-icon"></div></div></div>
+        <div class="slive"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <div class="sbody">
+        <div class="sname">Times Now</div>
+        <div class="sdesc">Breaking news, crime debates, ground-level reporting. Known for aggressive investigative coverage.</div>
+        <div class="smeta"><div class="live-dot"></div>Live on YouTube · Click to watch</div>
+      </div>
+    </a>
+    <a class="scard-tv" href="https://www.youtube.com/@RepublicWorld/streams" target="_blank">
+      <div class="sthumb">
+        <img src="https://yt3.googleusercontent.com/ytc/AIdro_n-VUCZCRi_W8N0c3T7YFpXOAGKH_7JHzCPqAJ8=s900-c-k-c0x00ffffff-no-rj" alt="Republic TV" onerror="this.style.display='none'">
+        <div class="splay"><div class="splay-btn"><div class="splay-icon"></div></div></div>
+        <div class="slive"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <div class="sbody">
+        <div class="sname">Republic TV</div>
+        <div class="sdesc">Bold investigative journalism. Crime exposés, underworld coverage, breaking news across India.</div>
+        <div class="smeta"><div class="live-dot"></div>Live on YouTube · Click to watch</div>
+      </div>
+    </a>
+    <a class="scard-tv" href="https://www.youtube.com/@indiatoday/streams" target="_blank">
+      <div class="sthumb">
+        <img src="https://yt3.googleusercontent.com/ytc/AIdro_n5MjEBwHMnjzA7gqVHZzV_cD8l1zqhfPqJ_rKN=s900-c-k-c0x00ffffff-no-rj" alt="India Today" onerror="this.style.display='none'">
+        <div class="splay"><div class="splay-btn"><div class="splay-icon"></div></div></div>
+        <div class="slive"><div class="live-dot"></div>LIVE</div>
+      </div>
+      <div class="sbody">
+        <div class="sname">India Today</div>
+        <div class="sdesc">In-depth news analysis, crime reports. Trusted for accuracy and comprehensive investigative coverage.</div>
+        <div class="smeta"><div class="live-dot"></div>Live on YouTube · Click to watch</div>
+      </div>
+    </a>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ TAB 6: ANALYSIS ═══════════ -->
+<div class="tabpanel" id="panel-analysis">
+<div class="panel-inner">
+  <div class="sec-label">Intelligence Assessment · 2022–2025</div>
+  <div class="sec-title" style="margin-bottom:1rem;">Crime <span>Intelligence Analysis</span></div>
+  <div class="insight-grid">
+    <div class="icard">
+      <div class="icard-head"><span class="icard-icon">🔴</span><div class="icard-title">Most Dangerous States</div></div>
+      <div class="finding"><span class="ficon">🏆</span><div class="ftext"><strong>Uttar Pradesh</strong> leads with 6.88L IPC cases (2022) — 11.8% of India's total. Mission Shakti improved women's safety but violent crime remains high.</div></div>
+      <div class="finding"><span class="ficon">🥈</span><div class="ftext"><strong>Maharashtra #2</strong> — 4.66L cases. Mumbai, Pune, Nagpur account for 68% of state's crime. Cyber fraud is surging fastest.</div></div>
+      <div class="finding"><span class="ficon">⚔️</span><div class="ftext"><strong>Madhya Pradesh</strong> has India's highest murder rate per lakh — 3.5 per 1L vs national avg of 2.2.</div></div>
+      <div class="finding"><span class="ficon">👩</span><div class="ftext"><strong>Rajasthan leads</strong> crimes vs women — 40,738 cases. Rape and kidnapping rates disproportionately high.</div></div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><span class="icard-icon">✅</span><div class="icard-title">Safest States & Cities</div></div>
+      <div class="finding"><span class="ficon">🏔️</span><div class="ftext"><strong>Nagaland, Mizoram, Sikkim</strong> consistently rank safest by crime rate per lakh. Community policing and small populations help.</div></div>
+      <div class="finding"><span class="ficon">🏙️</span><div class="ftext"><strong>Pune ranks top 3 safest metros</strong> by crime-per-capita despite being India's 8th largest city. Planned development helps.</div></div>
+      <div class="finding"><span class="ficon">⚖️</span><div class="ftext"><strong>Kerala's conviction rate — 62.8%</strong> is best among large states, the strongest deterrent India has.</div></div>
+      <div class="finding"><span class="ficon">🌿</span><div class="ftext"><strong>Northeast India</strong> (excl. Assam, Manipur) has significantly lower IPC rates than national average.</div></div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><span class="icard-icon">💻</span><div class="icard-title">Emerging Threats</div></div>
+      <div class="finding"><span class="ficon">📈</span><div class="ftext"><strong>Cyber crime up 500%+ since 2016.</strong> Jharkhand's Jamtara and Rajasthan's Mewat are now India's cybercrime capitals.</div></div>
+      <div class="finding"><span class="ficon">📱</span><div class="ftext"><strong>UPI & OTP fraud</strong> account for 67% of all cyber complaints. Elderly and first-time smartphone users are prime targets.</div></div>
+      <div class="finding"><span class="ficon">🚗</span><div class="ftext"><strong>Vehicle theft endemic</strong> — 1.7L cases in 2022. Delhi NCR & Mumbai are hotspots; recovery rates only 21%.</div></div>
+      <div class="finding"><span class="ficon">🤖</span><div class="ftext"><strong>AI-powered crimes emerging</strong>: deepfake fraud, voice cloning scams projected to dominate stats by 2026.</div></div>
+    </div>
+    <div class="icard">
+      <div class="icard-head"><span class="icard-icon">📊</span><div class="icard-title">Data Gaps & Limitations</div></div>
+      <div class="finding"><span class="ficon">⚠️</span><div class="ftext"><strong>Under-reporting is massive.</strong> NCRB estimates only 1 in 3 crimes are registered. Rural areas and UP/Bihar see the worst under-reporting.</div></div>
+      <div class="finding"><span class="ficon">🔄</span><div class="ftext"><strong>Cyber crime charge-sheet rate</strong> is just 7.2% nationally — out of every 100 cyber FIRs, fewer than 8 result in prosecution.</div></div>
+      <div class="finding"><span class="ficon">🗓️</span><div class="ftext"><strong>2022 is latest NCRB data</strong>. 2023–24 figures on this dashboard are projections based on state police quarterly data.</div></div>
+      <div class="finding"><span class="ficon">🗺️</span><div class="ftext"><strong>Area-level data</strong> is estimated from published police zone reports and is indicative, not exact census-level data.</div></div>
+    </div>
+  </div>
+  <div class="cgrid2">
+    <div class="cbox"><div class="cbox-title">State Crime Comparison (Top 10)</div><div class="cbox-sub">IPC · CYBER · CRIMES VS WOMEN · 2022</div><canvas id="stateCmp" height="180"></canvas></div>
+    <div class="cbox"><div class="cbox-title">City Safety Index</div><div class="cbox-sub">COMPOSITE SCORE /100 · HIGHER = SAFER</div><canvas id="citySafe" height="180"></canvas></div>
+  </div>
+</div>
+</div>
+
+</div><!-- /content -->
+
+<!-- STATUS BAR -->
+<div class="statusbar">
+  <div class="sb-item"><div class="sb-dot" style="background:var(--green);box-shadow:0 0 6px var(--green);"></div>System Online</div>
+  <div class="sb-item">Data: <span>NCRB 2022</span></div>
+  <div class="sb-item">Cities: <span>12 tracked</span></div>
+  <div class="sb-item">Areas: <span>60+ zones</span></div>
+  <div class="sb-item" style="margin-left:auto;">For awareness purposes only · CrimeWatch India 2025</div>
+</div>
+
+</div><!-- /app-shell -->
+
+<!-- AREA MODAL -->
+<div class="modal-bg" id="areaModal">
+  <div class="modal-box" id="areaModalContent"></div>
+</div>
+
+<script>
+// ── CLOCK ──
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clockEl').innerHTML=`<span>${n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span> IST`;
+}
+updateClock();setInterval(updateClock,1000);
+
+// ── TAB SWITCHING ──
+function switchTab(id,el){
+  document.querySelectorAll('.tabpanel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tabitem').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  el.classList.add('active');
+  if(id==='map')setTimeout(()=>lmap.invalidateSize(),100);
+}
+
+// ── DATA ──
+const RC={critical:'#e84855',high:'#f9844a',medium:'#ffd166',low:'#06d6a0'};
+const stateData=[
+  {name:'Uttar Pradesh',code:'UP',ipc:688400,cyber:26049,women:65743,murder:3491,risk:'critical',lat:26.8,lng:80.9},
+  {name:'Maharashtra',code:'MH',ipc:466388,cyber:22084,women:39526,murder:2656,risk:'critical',lat:19.7,lng:75.7},
+  {name:'Delhi',code:'DL',ipc:318000,cyber:28000,women:15000,murder:620,risk:'critical',lat:28.6,lng:77.2},
+  {name:'Madhya Pradesh',code:'MP',ipc:337862,cyber:11630,women:35489,murder:2620,risk:'high',lat:22.9,lng:78.6},
+  {name:'Rajasthan',code:'RJ',ipc:295022,cyber:14490,women:40738,murder:1620,risk:'high',lat:27.0,lng:74.2},
+  {name:'Tamil Nadu',code:'TN',ipc:289741,cyber:16500,women:24847,murder:1395,risk:'high',lat:11.1,lng:78.6},
+  {name:'Telangana',code:'TG',ipc:220000,cyber:18000,women:17600,murder:810,risk:'high',lat:17.1,lng:79.0},
+  {name:'Bihar',code:'BR',ipc:220000,cyber:8200,women:16700,murder:3200,risk:'high',lat:25.6,lng:85.1},
+  {name:'Karnataka',code:'KA',ipc:213000,cyber:19000,women:15200,murder:1050,risk:'high',lat:15.3,lng:75.7},
+  {name:'West Bengal',code:'WB',ipc:188000,cyber:7800,women:21000,murder:1480,risk:'high',lat:22.9,lng:87.8},
+  {name:'Haryana',code:'HR',ipc:120000,cyber:7800,women:14200,murder:740,risk:'medium',lat:29.0,lng:76.1},
+  {name:'Gujarat',code:'GJ',ipc:155000,cyber:10400,women:11300,murder:780,risk:'medium',lat:22.2,lng:71.2},
+  {name:'Andhra Pradesh',code:'AP',ipc:165000,cyber:9200,women:16000,murder:860,risk:'medium',lat:15.9,lng:79.7},
+  {name:'Jharkhand',code:'JH',ipc:85000,cyber:12000,women:9800,murder:1100,risk:'high',lat:23.6,lng:85.3},
+  {name:'Kerala',code:'KL',ipc:95000,cyber:6200,women:9100,murder:380,risk:'medium',lat:10.8,lng:76.2},
+  {name:'Punjab',code:'PB',ipc:96000,cyber:5100,women:8900,murder:720,risk:'medium',lat:31.1,lng:75.3},
+  {name:'Assam',code:'AS',ipc:78000,cyber:3100,women:15200,murder:890,risk:'high',lat:26.2,lng:92.9},
+  {name:'Uttarakhand',code:'UK',ipc:32000,cyber:2800,women:5100,murder:230,risk:'medium',lat:30.3,lng:78.0},
+  {name:'Himachal Pradesh',code:'HP',ipc:18000,cyber:1200,women:2400,murder:130,risk:'low',lat:31.9,lng:77.1},
+  {name:'Goa',code:'GA',ipc:12000,cyber:1800,women:1200,murder:80,risk:'low',lat:15.3,lng:74.0},
+];
+
+const cityData=[
+  {name:'Delhi',state:'Delhi',risk:'critical',ipc:318000,theft:98000,cyber:28000,violence:18000,women:15000,score:28,lat:28.66,lng:77.21,comment:'Highest absolute crime volume. Dense population, complex governance. Cyber fraud growing fastest.',
+   areas:[
+    {name:'Connaught Place / Central',risk:'critical',total:42000,theft:18000,cyber:9200,violence:3800,comment:'Highest crime density. Commercial hub, mass transit pickpocketing rampant. Gang activity near NDLS.'},
+    {name:'Rohini / Outer Delhi',risk:'high',total:38000,theft:14000,cyber:7100,violence:4200,comment:'Rapidly expanding residential. Snatching and vehicle theft prominent. Gang networks near courts.'},
+    {name:'Shahdara / East Delhi',risk:'high',total:35000,theft:12000,cyber:5800,violence:5100,comment:'Dense industrial-residential mix. Property crimes high. Women safety concerns late-night.'},
+    {name:'Saket / South Delhi',risk:'medium',total:28000,theft:9000,cyber:6800,violence:2100,comment:'Upscale residential with malls. Cyber fraud targets professionals. Weekend drink-drive incidents.'},
+    {name:'Dwarka / South West',risk:'medium',total:24000,theft:8800,cyber:5100,violence:1800,comment:'Planned residential colony. Vehicle theft from apartments common. Relatively safer zone.'},
+    {name:'Pitampura / NW Delhi',risk:'medium',total:22000,theft:7800,cyber:4800,violence:1600,comment:'Semi-commercial belt. Chain snatching in markets. Petty crime rising with density.'},
+  ]},
+  {name:'Mumbai',state:'Maharashtra',risk:'critical',ipc:180000,theft:62000,cyber:22084,violence:11000,women:12000,score:34,lat:19.08,lng:72.88,comment:'Financial capital crime hub. Organised crime + cyber fraud. Dharavi and Kurla are hotspots.',
+   areas:[
+    {name:'Dharavi / Kurla',risk:'critical',total:28000,theft:9800,cyber:3200,violence:4100,comment:'Densest slum. Gang turf disputes, drug trafficking. Organised crime presence is significant.'},
+    {name:'Andheri / Jogeshwari',risk:'high',total:24000,theft:8200,cyber:6100,violence:3400,comment:'Commercial-residential. Auto theft near IT parks common. Nightlife incidents on weekends.'},
+    {name:'CST / Fort / Colaba',risk:'high',total:22000,theft:9100,cyber:4800,violence:2200,comment:'Tourist and financial district. Mass transit pickpocketing. Street crime near VT terminus.'},
+    {name:'Thane Belt',risk:'high',total:20000,theft:7400,cyber:5900,violence:2800,comment:'Rapid growth, insufficient policing. Builder-gang disputes. Cyber fraud surge.'},
+    {name:'Bandra / Juhu',risk:'medium',total:16000,theft:5200,cyber:4100,violence:1400,comment:'Upscale entertainment zone. Vehicle theft prominent. Generally safer per capita.'},
+    {name:'Navi Mumbai',risk:'medium',total:14000,theft:4800,cyber:5200,violence:1200,comment:'Planned city. Cyber fraud networks busted multiple times. Relatively safe for residents.'},
+  ]},
+  {name:'Bengaluru',state:'Karnataka',risk:'high',ipc:120000,theft:55000,cyber:19000,violence:8500,women:8100,score:45,lat:12.97,lng:77.59,comment:'IT corridor drives cyber crime. Majestic & Shivajinagar are high-risk. Vehicle theft rampant.',
+   areas:[
+    {name:'Majestic / KR Market',risk:'critical',total:18200,theft:6800,cyber:4200,violence:1800,comment:'Highest crime density. Transit hub chaos. Active rowdy sheets. Gang activity in old city.'},
+    {name:'Whitefield / ITPL',risk:'high',total:14800,theft:5100,cyber:5800,violence:1200,comment:'Tech corridor — high cyber fraud. Vehicle theft from IT parks. Chain snatching rising.'},
+    {name:'Shivajinagar / Cottonpet',risk:'critical',total:12000,theft:4500,cyber:2800,violence:1600,comment:'Old commercial zone. Drug circulation, gang activity. Commercial thefts dominant.'},
+    {name:'Yelahanka / North BLR',risk:'high',total:11000,theft:4100,cyber:3400,violence:1100,comment:'Rapidly expanding. Robberies rising with real estate boom. Chain snatching prevalent.'},
+    {name:'Koramangala / HSR',risk:'medium',total:9200,theft:3200,cyber:3900,violence:800,comment:'Startup ecosystem + pub culture. Cyber fraud and late-night incidents primary concerns.'},
+    {name:'JP Nagar / Banashankari',risk:'low',total:7800,theft:2900,cyber:2800,violence:580,comment:'Residential zone. Vehicle thefts main concern. Consistently safer for women.'},
+  ]},
+  {name:'Hyderabad',state:'Telangana',risk:'high',ipc:98000,theft:38000,cyber:18000,violence:6200,women:7200,score:48,lat:17.38,lng:78.49,comment:'Old City zones are highest crime density. Cyber fraud targets IT professionals heavily.',
+   areas:[
+    {name:'Old City / Charminar',risk:'critical',total:16000,theft:5800,cyber:2100,violence:2800,comment:'Highest crime density. Overcrowded lanes make policing difficult. Communal sensitivity.'},
+    {name:'Hitech City / Madhapur',risk:'high',total:14000,theft:4200,cyber:7800,violence:1100,comment:'IT hub prime target for cyber fraud. Employee impersonation scams common.'},
+    {name:'Secunderabad',risk:'high',total:12000,theft:4800,cyber:3200,violence:1800,comment:'Cantonment border. Property theft in surrounding areas. Defence zones are safer.'},
+    {name:'Banjara Hills / Jubilee',risk:'medium',total:9000,theft:3100,cyber:3800,violence:700,comment:'Upscale. High-value burglaries targeted. Celebrity residences are occasional targets.'},
+    {name:'Kukatpally / Miyapur',risk:'medium',total:10000,theft:3600,cyber:3100,violence:1000,comment:'Dense residential. Vehicle theft common. Women safety improving with new police posts.'},
+    {name:'LB Nagar / Saroornagar',risk:'medium',total:8000,theft:2900,cyber:2400,violence:900,comment:'Outer suburb. Property crimes growing with construction boom.'},
+  ]},
+  {name:'Chennai',state:'Tamil Nadu',risk:'high',ipc:92000,theft:40000,cyber:16500,violence:5800,women:7400,score:50,lat:13.08,lng:80.27,comment:'Vehicle theft is top crime. North Chennai industrial belt has higher violent crime rates.',
+   areas:[
+    {name:'North Chennai / Tondiarpet',risk:'critical',total:18000,theft:7200,cyber:2800,violence:2900,comment:'Industrial belt. Gang-related violence. Vehicle theft from industrial zones. Drug links.'},
+    {name:'T. Nagar / Mylapore',risk:'high',total:15000,theft:6200,cyber:4800,violence:1400,comment:'Commercial hub. Pickpocketing in shopping corridors. Vehicle theft near Pondy Bazaar.'},
+    {name:'Anna Nagar / Kilpauk',risk:'medium',total:12000,theft:4800,cyber:4100,violence:1000,comment:'Residential. Relatively safe. Cyber fraud targeting IT workers increasing.'},
+    {name:'Perambur / Vyasarpadi',risk:'high',total:11000,theft:4400,cyber:2200,violence:1600,comment:'Dense working-class. Labour disputes occasionally violent. Theft rates high.'},
+    {name:'Tambaram / Chromepet',risk:'medium',total:10000,theft:4100,cyber:3200,violence:1100,comment:'Outer suburb. Vehicle theft near tech parks common.'},
+    {name:'Adyar / Besant Nagar',risk:'low',total:7500,theft:2800,cyber:2600,violence:580,comment:'Upscale coastal zone. Consistently safe. Beach areas see petty crime at night only.'},
+  ]},
+  {name:'Kolkata',state:'West Bengal',risk:'high',ipc:88000,theft:32000,cyber:7800,violence:7100,women:6900,score:47,lat:22.57,lng:88.36,comment:'Gang-related activity prominent. Cyber crime lower vs metros but growing.',
+   areas:[
+    {name:'Burrabazar / Howrah',risk:'critical',total:15000,theft:6100,cyber:1800,violence:2800,comment:'Oldest commercial district. Crowd pickpocketing. Gang conflicts near Howrah Bridge. Drug transit.'},
+    {name:'Park Street / Esplanade',risk:'high',total:13000,theft:4800,cyber:2400,violence:2100,comment:'Entertainment zone. Late-night assaults. Pickpocketing near New Market.'},
+    {name:'North Kolkata / Shyambazar',risk:'high',total:14000,theft:5200,cyber:1600,violence:2600,comment:'Dense old residential. Political violence during elections. Property crimes high.'},
+    {name:'South Kolkata / Jadavpur',risk:'medium',total:10000,theft:3800,cyber:1900,violence:1200,comment:'Academic and residential. Lower violence. Chain snatching near markets.'},
+    {name:'Salt Lake / New Town',risk:'low',total:8000,theft:2600,cyber:2800,violence:600,comment:'Planned IT township. Low crime. Cyber fraud targeting sector workers. Generally safe.'},
+    {name:'Behala / Joka',risk:'medium',total:9000,theft:3400,cyber:1400,violence:1100,comment:'Outer south. Property crime growing with expansion.'},
+  ]},
+  {name:'Lucknow',state:'Uttar Pradesh',risk:'high',ipc:72000,theft:28000,cyber:9200,violence:6400,women:8200,score:42,lat:26.85,lng:80.95,comment:'State capital. Snatch-and-run frequent. Old city zones have gang activity.',
+   areas:[
+    {name:'Hazratganj / Aminabad',risk:'high',total:16000,theft:6200,cyber:3800,violence:2200,comment:'Central commercial. Pickpocketing rampant. Snatch-and-run in crowded bazaars.'},
+    {name:'Old Lucknow / Chowk',risk:'critical',total:14000,theft:5600,cyber:2200,violence:2800,comment:'Dense old city. Gang activity. Women safety concerns. Drug network near river.'},
+    {name:'Gomti Nagar',risk:'medium',total:11000,theft:3900,cyber:3600,violence:1100,comment:'Planned upscale township. Cyber fraud targeting professionals. Vehicle theft common.'},
+    {name:'Alambagh / Aliganj',risk:'medium',total:10000,theft:3800,cyber:2800,violence:1200,comment:'Mixed residential-commercial. Snatching near bus terminus.'},
+  ]},
+  {name:'Jaipur',state:'Rajasthan',risk:'high',ipc:68000,theft:24000,cyber:7800,violence:4200,women:9100,score:44,lat:26.91,lng:75.79,comment:'Tourist zone scams target foreigners. Crimes against women proportionally very high.',
+   areas:[
+    {name:'Pink City / Walled City',risk:'high',total:14000,theft:5200,cyber:2600,violence:1600,comment:'Tourist zone. Gem and jewellery scams target foreigners. Pickpocketing near Hawa Mahal.'},
+    {name:'Sodala / Shyam Nagar',risk:'high',total:12000,theft:4600,cyber:2400,violence:1800,comment:'Dense working class. Property crimes high. Women safety concern near markets.'},
+    {name:'Malviya Nagar / Vaishali',risk:'medium',total:10000,theft:3800,cyber:2900,violence:1000,comment:'Residential. Chain snatching rising. Vehicle theft from housing societies common.'},
+    {name:'C-Scheme / Raja Park',risk:'low',total:7000,theft:2400,cyber:2200,violence:600,comment:'Upscale zone. Safer per capita. Cyber fraud and vehicle theft are primary concerns.'},
+  ]},
+  {name:'Ahmedabad',state:'Gujarat',risk:'medium',ipc:60000,theft:22000,cyber:10400,violence:3800,women:5400,score:55,lat:23.03,lng:72.58,comment:'Better policing keeps rates lower than size suggests. Cyber fraud is growing.',
+   areas:[
+    {name:'Kalupur / Dariyapur',risk:'high',total:13000,theft:5200,cyber:2800,violence:2100,comment:'Old walled city. Dense population. Communal sensitivity historically. Street crime.'},
+    {name:'SG Highway / Satellite',risk:'medium',total:10000,theft:3400,cyber:4200,violence:800,comment:'Modern commercial. Cyber fraud targets IT parks. Vehicle theft from malls.'},
+    {name:'Maninagar / Ghatlodia',risk:'medium',total:9000,theft:3200,cyber:2600,violence:900,comment:'Residential middle class. Snatching and vehicle theft primary concerns.'},
+    {name:'Bodakdev / Thaltej',risk:'low',total:7000,theft:2200,cyber:2600,violence:500,comment:'Upscale residential. Good policing. Cyber fraud is rising concern here.'},
+  ]},
+  {name:'Pune',state:'Maharashtra',risk:'medium',ipc:55000,theft:20000,cyber:8200,violence:3200,women:4800,score:62,lat:18.52,lng:73.86,comment:'One of India\'s safer metros. Young tech population targeted for cyber fraud.',
+   areas:[
+    {name:'Budhwar Peth / Old City',risk:'high',total:11000,theft:4200,cyber:2100,violence:2000,comment:'Old city. Drug abuse. Gang-related incidents. High police presence.'},
+    {name:'Koregaon Park / Kalyani Nagar',risk:'medium',total:9000,theft:3100,cyber:2800,violence:800,comment:'Pub zone with expat population. Drink-drive accidents. Weekend incident hotspot.'},
+    {name:'Hinjewadi / Wakad',risk:'low',total:8000,theft:2800,cyber:3200,violence:500,comment:'IT park zone. Cyber fraud common. Vehicle theft from tech companies. Otherwise safe.'},
+    {name:'Hadapsar / Solapur Road',risk:'medium',total:9000,theft:3400,cyber:2400,violence:900,comment:'Industrial-residential. Growing crime with population influx.'},
+  ]},
+  {name:'Chandigarh',state:'Punjab',risk:'low',ipc:22000,theft:8000,cyber:3800,violence:900,women:2300,score:74,lat:30.74,lng:76.79,comment:'India\'s safest planned city. Excellent police-citizen ratio. Very low violent crime.',
+   areas:[
+    {name:'Sector 17 / Sector 22',risk:'low',total:5500,theft:2100,cyber:1600,violence:300,comment:'Planned commercial centre. Lowest crime density of any Indian city centre. Regular patrol.'},
+    {name:'Industrial Area',risk:'medium',total:6000,theft:2400,cyber:1200,violence:400,comment:'Industrial zone. Labour disputes occasionally flare. Vehicle theft from parking lots.'},
+    {name:'Sector 44 / 45',risk:'low',total:4000,theft:1400,cyber:1100,violence:200,comment:'Residential. Very safe. Excellent CCTV coverage. Rare incidents reported.'},
+  ]},
+  {name:'Thiruvananthapuram',state:'Kerala',risk:'low',ipc:28000,theft:10000,cyber:3200,violence:1200,women:2600,score:71,lat:8.52,lng:76.94,comment:'Kerala\'s best conviction rates act as strong deterrent. Among India\'s safest large cities.',
+   areas:[
+    {name:'East Fort / Chalai',risk:'medium',total:7000,theft:2800,cyber:1100,violence:600,comment:'Old commercial area. Petty crime near market. Otherwise well-policed.'},
+    {name:'Kowdiar / Pettah',risk:'low',total:5000,theft:1800,cyber:1200,violence:300,comment:'Upscale residential near Raj Bhavan. Excellent safety record.'},
+    {name:'Karamana / Attakulangara',risk:'medium',total:6000,theft:2400,cyber:1000,violence:500,comment:'Dense residential. Manageable crime. Kerala\'s conviction rates deter offenders.'},
+  ]},
+];
+
+const newsArticles=[
+  {title:'UP Police arrests 12 in crackdown on organised gang across Lucknow and Kanpur',source:'NDTV',url:'https://www.ndtv.com/topic/crime',time:'2 hr ago',desc:'STF raids across 8 locations. Gang allegedly involved in robbery and kidnapping for ransom over 3 years.',status:'confirmed',tags:['robbery','up'],region:'up',img:'https://c.ndtvimg.com/2024-01/54rnmne_police_625x300_11_January_24.jpg'},
+  {title:'Mumbai cyber cell busts ₹40 crore OTP fraud ring; 6 arrested in Navi Mumbai',source:'Times of India',url:'https://timesofindia.indiatimes.com/topic/crime',time:'4 hr ago',desc:'Accused impersonated bank officials and extracted OTPs from elderly victims across 2 states.',status:'confirmed',tags:['cyber','fraud'],region:'mumbai',img:'https://static.toiimg.com/thumb/msid-108261001,width-1280,height-720,resizemode-4/108261001.jpg'},
+  {title:'Delhi woman harassed near Saket metro; police register FIR, suspect at large',source:'Hindustan Times',url:'https://www.hindustantimes.com/topic/crime',time:'6 hr ago',desc:'Victim filed complaint at Saket PS. CCTV footage reviewed. Suspect description shared with PCR units.',status:'confirmed',tags:['women','delhi'],region:'delhi',img:'https://images.hindustantimes.com/img/2022/11/16/550x309/delhi-police_1668596558680_1668596558680.jpg'},
+  {title:'Rajasthan: 3 men arrested for kidnapping minor near Ajmer; motive under probe',source:'Indian Express',url:'https://indianexpress.com/section/cities/',time:'8 hr ago',desc:'Minor rescued within 18 hours. Police confirm arrests — motive not officially established yet.',status:'developing',tags:['kidnapping'],region:'all',img:'https://images.indianexpress.com/2023/01/rajasthan-police.jpg'},
+  {title:'Bengaluru IT employee loses ₹18L to fake trading app; police warn of network',source:'The Hindu',url:'https://www.thehindu.com/news/national/',time:'10 hr ago',desc:'Victim lured via WhatsApp with stock return promises. Police warn of 4-state scam network.',status:'confirmed',tags:['cyber','fraud'],region:'bengaluru',img:'https://bl-i.thgim.com/public/news/cities/bangalore/article65897154.ece/alternates/FREE_1200/bengaluru%20police.jpg'},
+  {title:'Drug network busted at Punjab-HP border; 3 kg heroin seized, Pakistani link unconfirmed',source:'NDTV',url:'https://www.ndtv.com/topic/crime',time:'12 hr ago',desc:'NCB-Punjab Police joint op. Pakistani nationals reportedly involved — MEA has not confirmed.',status:'unconfirmed',tags:['drugs'],region:'all',img:'https://c.ndtvimg.com/2023-06/8e7v2pls_punjab-police_625x300_06_June_23.jpg'},
+  {title:'MP records highest per-capita violent crime in Q4 2024 per NCRB provisional data',source:'Times of India',url:'https://timesofindia.indiatimes.com/topic/crime',time:'1 day ago',desc:'MP leads murder rate per lakh, outpacing national avg by 59%. State police dispute methodology.',status:'confirmed',tags:['murder'],region:'all',img:'https://static.toiimg.com/thumb/msid-98563217,width-1280,height-720,resizemode-4/98563217.jpg'},
+  {title:'Kolkata: Fake job placement gang busted; 140+ migrant workers defrauded',source:'Indian Express',url:'https://indianexpress.com/section/cities/',time:'1 day ago',desc:'Accused promised factory jobs in Gujarat. Victims paid ₹20K–50K. Three arrested in Salt Lake.',status:'confirmed',tags:['fraud','robbery'],region:'kolkata',img:'https://images.indianexpress.com/2022/12/kolkata-police-1200.jpg'},
+  {title:'Chennai auto-driver gang robbery near Marina Beach — video being verified by police',source:'Hindustan Times',url:'https://www.hindustantimes.com/topic/crime',time:'1 day ago',desc:'Viral clip claims to show robbery. Chennai Police: "Under verification — no FIR confirmed yet."',status:'unconfirmed',tags:['robbery'],region:'chennai',img:'https://images.hindustantimes.com/img/2022/09/28/550x309/chennai-police_1664341688380_1664341688380.jpg'},
+  {title:'Hyderabad CyberSafe initiative: ₹8.2 crore recovered, 500 cases solved since Jan 2025',source:'The Hindu',url:'https://www.thehindu.com/news/national/',time:'2 days ago',desc:'Telangana Cyber Security Bureau milestone. Awareness campaigns in 40 colleges across city.',status:'confirmed',tags:['cyber'],region:'all',img:'https://bl-i.thgim.com/public/news/national/article66447624.ece/alternates/FREE_1200/hyderabad-police.jpg'},
+  {title:'Assam: NIA arrests 2 suspected ULFA(I) operatives in Dibrugarh with IED components',source:'NDTV',url:'https://www.ndtv.com/topic/crime',time:'2 days ago',desc:'Encrypted communication devices seized. Both charged under UAPA. Cross-border network suspected.',status:'confirmed',tags:['terrorism'],region:'all',img:'https://c.ndtvimg.com/2023-10/tqq6ck3_assam-police_625x300_28_October_23.jpg'},
+  {title:'Gurugram ATM skimming report unverified — Haryana Police confirm only 1 case registered',source:'Hindustan Times',url:'https://www.hindustantimes.com/topic/crime',time:'2 days ago',desc:'1 case registered; 2 other claims remain under verification. No widespread skimming confirmed.',status:'unconfirmed',tags:['cyber','fraud'],region:'delhi',img:'https://images.hindustantimes.com/img/2022/01/14/550x309/gurugram-police_1642152688399_1642152688399.jpg'},
+];
+
+let activeTF='all',activeRF='all';
+
+// ── CHARTS ──
+Chart.defaults.color='#6b7280';Chart.defaults.borderColor='rgba(255,255,255,0.05)';
+Chart.defaults.font.family="'Space Grotesk',sans-serif";Chart.defaults.font.size=11;
+const gOpts={y:{grid:{color:'rgba(255,255,255,0.04)'}},x:{grid:{color:'rgba(255,255,255,0.04)'}}};
+
+new Chart(document.getElementById('natTrend'),{type:'line',data:{labels:['2014','2015','2016','2017','2018','2019','2020','2021','2022','2023*'],datasets:[{label:'IPC Cases (Lakhs)',data:[29.8,31.0,32.1,32.2,31.3,30.2,20.2,36.0,58.2,60.1],borderColor:'#e84855',backgroundColor:'rgba(232,72,85,0.08)',fill:true,tension:0.4,pointRadius:3,borderWidth:2},{label:'Cyber (Lakhs)',data:[0.44,0.49,0.65,0.77,0.96,1.44,2.87,4.52,9.66,15.9],borderColor:'#4cc9f0',backgroundColor:'rgba(76,201,240,0.05)',fill:true,tension:0.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,plugins:{legend:{position:'top',labels:{boxWidth:10}}},scales:gOpts}});
+
+new Chart(document.getElementById('natBreak'),{type:'doughnut',data:{labels:['Property','Cyber','Women','Violent','Kidnap','Murder','Drugs','Other'],datasets:[{data:[22,16.6,7.6,9.8,1.8,0.5,4.2,37.5],backgroundColor:['#ffd166','#4cc9f0','#e84855','#f9844a','#7b2d8b','#c9184a','#06d6a0','#4361ee'],borderColor:'#0e1018',borderWidth:2}]},options:{responsive:true,cutout:'60%',plugins:{legend:{position:'right',labels:{boxWidth:8,padding:8,font:{size:10}}}}}});
+
+new Chart(document.getElementById('womenC'),{type:'bar',data:{labels:['14','15','16','17','18','19','20','21','22'],datasets:[{label:'Cases (K)',data:[337,329,338,359,378,405,371,428,445],backgroundColor:'rgba(232,72,85,0.6)',borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:gOpts}});
+
+new Chart(document.getElementById('violentC'),{type:'line',data:{labels:['2014','2016','2018','2020','2022'],datasets:[{label:'Murder',data:[33981,30450,29017,29193,28522],borderColor:'#e84855',tension:0.4,pointRadius:3,borderWidth:2},{label:'Robbery×10',data:[5504,5136,4325,2953,4085],borderColor:'#ffd166',tension:0.4,pointRadius:3,borderWidth:2},{label:'Kidnap÷10',data:[8956,9732,10367,8480,10789],borderColor:'#7b2d8b',tension:0.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8,font:{size:10}}}},scales:gOpts}});
+
+new Chart(document.getElementById('cyberC'),{type:'line',data:{labels:['2016','17','18','19','20','21','22','23*'],datasets:[{label:'Cyber Cases (K)',data:[65,77,96,144,287,452,966,1590],borderColor:'#4cc9f0',backgroundColor:'rgba(76,201,240,0.08)',fill:true,tension:0.4,pointRadius:3,borderWidth:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{grid:{color:'rgba(76,201,240,0.05)'}},x:{grid:{color:'rgba(76,201,240,0.05)'}}}}});
+
+const top15=[...stateData].sort((a,b)=>b.ipc-a.ipc).slice(0,15);
+new Chart(document.getElementById('stateRanking'),{type:'bar',data:{labels:top15.map(s=>s.name),datasets:[{label:'IPC Cases',data:top15.map(s=>s.ipc),backgroundColor:top15.map(s=>s.risk==='critical'?'rgba(232,72,85,0.75)':s.risk==='high'?'rgba(249,132,74,0.7)':s.risk==='medium'?'rgba(255,209,102,0.65)':'rgba(6,214,160,0.6)'),borderRadius:4}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{grid:{color:'rgba(255,255,255,0.04)'}},x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{maxRotation:45,font:{size:9}}}}}});
+
+const top10=[...stateData].sort((a,b)=>b.ipc-a.ipc).slice(0,10);
+new Chart(document.getElementById('stateCmp'),{type:'bar',data:{labels:top10.map(s=>s.code),datasets:[{label:'IPC',data:top10.map(s=>s.ipc),backgroundColor:'rgba(232,72,85,0.7)',borderRadius:3},{label:'Cyber',data:top10.map(s=>s.cyber),backgroundColor:'rgba(76,201,240,0.65)',borderRadius:3},{label:'Women',data:top10.map(s=>s.women),backgroundColor:'rgba(255,209,102,0.6)',borderRadius:3}]},options:{responsive:true,plugins:{legend:{labels:{boxWidth:8,font:{size:10}}}},scales:gOpts}});
+
+const cbs=[...cityData].sort((a,b)=>b.score-a.score);
+new Chart(document.getElementById('citySafe'),{type:'bar',data:{labels:cbs.map(c=>c.name),datasets:[{label:'Safety /100',data:cbs.map(c=>c.score),backgroundColor:cbs.map(c=>c.score>=65?'rgba(6,214,160,0.7)':c.score>=50?'rgba(76,201,240,0.65)':c.score>=40?'rgba(255,209,102,0.6)':'rgba(232,72,85,0.7)'),borderRadius:4}]},options:{responsive:true,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{max:100,grid:{color:'rgba(255,255,255,0.04)'}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{font:{size:9}}}}}});
+
+// ── MAP ──
+const lmap=L.map('leaflet-map',{center:[20.59,78.96],zoom:5});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(lmap);
+
+function mkIcon(risk,sz=16){
+  const c=RC[risk];
+  return L.divIcon({className:'',html:`<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${c};border:2px solid rgba(255,255,255,0.25);box-shadow:0 0 14px ${c}66;cursor:pointer;transition:transform 0.2s;"></div>`,iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
+}
+
+cityData.forEach(city=>{
+  const m=L.marker([city.lat,city.lng],{icon:mkIcon(city.risk,18)}).addTo(lmap);
+  m.bindPopup(`<div style="min-width:200px;font-family:'Space Grotesk',sans-serif;">
+    <div class="pp-name">${city.name}</div>
+    <div class="pp-state">${city.state}</div>
+    <span class="pp-badge" style="background:${RC[city.risk]}22;color:${RC[city.risk]};border:1px solid ${RC[city.risk]}44;">${city.risk.toUpperCase()}</span>
+    <div class="pp-rows">
+      <div class="pp-row"><span>IPC Cases/yr</span><span>${city.ipc.toLocaleString('en-IN')}</span></div>
+      <div class="pp-row"><span>Cyber Crime</span><span>${city.cyber.toLocaleString('en-IN')}</span></div>
+      <div class="pp-row"><span>Theft</span><span>${city.theft.toLocaleString('en-IN')}</span></div>
+      <div class="pp-row"><span>Women Cases</span><span>${city.women.toLocaleString('en-IN')}</span></div>
+      <div class="pp-row"><span>Safety Score</span><span>${city.score}/100</span></div>
+    </div>
+    <button class="pp-btn" onclick="openAreaModal('${city.name}')">▶ View Area Breakdown</button>
+  </div>`);
+  m.on('click',()=>setDetailPanel(city));
+});
+
+// State rank
+const sorted=[...stateData].sort((a,b)=>b.ipc-a.ipc);
+sorted.forEach((s,i)=>{
+  const pct=Math.round(s.ipc/sorted[0].ipc*100);
+  document.getElementById('stateRankEl').innerHTML+=`<div class="sr-item" onclick="lmap.flyTo([${s.lat},${s.lng}],7,{duration:1});">
+    <span class="sr-num">${i+1}</span><span class="sr-name">${s.name}</span>
+    <div class="sr-bar"><div class="sr-fill" style="width:${pct}%;background:${RC[s.risk]};"></div></div>
+  </div>`;
+});
+
+function setDetailPanel(city){
+  document.getElementById('detailPanel').innerHTML=`
+    <div class="dp-name">${city.name}</div>
+    <div class="dp-sub">${city.state} · <span style="color:${RC[city.risk]}">${city.risk.toUpperCase()}</span> · Score: ${city.score}/100</div>
+    <div class="dp-grid">
+      <div class="dp-stat"><div class="dp-sv" style="color:var(--acc)">${(city.ipc/1000).toFixed(0)}K</div><div class="dp-sl">IPC CASES</div></div>
+      <div class="dp-stat"><div class="dp-sv" style="color:var(--cyan)">${(city.cyber/1000).toFixed(0)}K</div><div class="dp-sl">CYBER</div></div>
+      <div class="dp-stat"><div class="dp-sv" style="color:var(--yellow)">${(city.theft/1000).toFixed(0)}K</div><div class="dp-sl">THEFT</div></div>
+      <div class="dp-stat"><div class="dp-sv" style="color:var(--acc)">${(city.women/1000).toFixed(0)}K</div><div class="dp-sl">WOMEN</div></div>
+    </div>
+    <div class="dp-comment">${city.comment}</div>
+    <button class="pp-btn" style="margin-top:0.75rem;" onclick="openAreaModal('${city.name}')">▶ Area Breakdown</button>`;
+}
+
+// ── AREA MODAL ──
+function openAreaModal(cn){
+  const city=cityData.find(c=>c.name===cn);if(!city)return;
+  const mx=Math.max(...city.areas.map(a=>a.total));
+  const pct=(v,m)=>Math.round(v/m*100);
+  let h=`<button class="modal-close" onclick="closeModal()">✕ Close</button>
+    <div class="modal-city">${city.name}</div>
+    <div class="modal-sub">${city.state} · <span style="color:${RC[city.risk]}">${city.risk.toUpperCase()} RISK</span> · Safety Score: ${city.score}/100</div>
+    <div class="modal-stats">
+      <div class="ms-box"><div class="ms-pct" style="color:var(--acc)">${(city.ipc/1000).toFixed(0)}K</div><div class="ms-raw">${city.ipc.toLocaleString('en-IN')}</div><div class="ms-lbl">IPC Cases/yr</div></div>
+      <div class="ms-box"><div class="ms-pct" style="color:var(--cyan)">${(city.cyber/1000).toFixed(0)}K</div><div class="ms-raw">${city.cyber.toLocaleString('en-IN')}</div><div class="ms-lbl">Cyber Crime</div></div>
+      <div class="ms-box"><div class="ms-pct" style="color:var(--yellow)">${(city.theft/1000).toFixed(0)}K</div><div class="ms-raw">${city.theft.toLocaleString('en-IN')}</div><div class="ms-lbl">Theft</div></div>
+      <div class="ms-box"><div class="ms-pct" style="color:var(--acc)">${(city.women/1000).toFixed(0)}K</div><div class="ms-raw">${city.women.toLocaleString('en-IN')}</div><div class="ms-lbl">Women Cases</div></div>
+      <div class="ms-box"><div class="ms-pct" style="color:${city.score>=65?'var(--green)':city.score>=50?'var(--cyan)':city.score>=40?'var(--yellow)':'var(--acc)'}">${city.score}</div><div class="ms-raw">out of 100</div><div class="ms-lbl">Safety Score</div></div>
+    </div>
+    <div class="area-section-title">📍 ${city.areas.length} Police Zones — Area Breakdown</div>
+    <div class="area-grid">`;
+  city.areas.forEach(a=>{
+    h+=`<div class="azone">
+      <span class="rbadge r${a.risk.charAt(0)}" style="position:absolute;top:0.75rem;right:0.75rem;">${a.risk}</span>
+      <div class="az-name">${a.name}</div>
+      <div class="az-meta">~${a.total.toLocaleString('en-IN')} cases/yr</div>
+      <div class="az-bar-row"><span class="az-lbl">Theft</span><div class="az-track"><div class="az-fill" style="width:${pct(a.theft,mx)}%;background:${RC[a.risk]};"></div></div><span class="az-val">${(a.theft/1000).toFixed(1)}K</span></div>
+      <div class="az-bar-row"><span class="az-lbl">Cyber</span><div class="az-track"><div class="az-fill" style="width:${pct(a.cyber,mx)}%;background:#4cc9f0;"></div></div><span class="az-val">${(a.cyber/1000).toFixed(1)}K</span></div>
+      <div class="az-bar-row"><span class="az-lbl">Violence</span><div class="az-track"><div class="az-fill" style="width:${pct(a.violence,mx)}%;background:#e84855;"></div></div><span class="az-val">${(a.violence/1000).toFixed(1)}K</span></div>
+      <div class="az-comment">${a.comment}</div>
+    </div>`;
+  });
+  h+=`</div>`;
+  document.getElementById('areaModalContent').innerHTML=h;
+  document.getElementById('areaModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeModal(){document.getElementById('areaModal').classList.remove('open');document.body.style.overflow='';}
+document.getElementById('areaModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// ── DRILLDOWN ──
+const allStates=['All',...new Set(cityData.map(c=>c.state))].sort();
+const tabsEl=document.getElementById('stateTabs');
+allStates.forEach(s=>{
+  const b=document.createElement('button');
+  b.className='stab'+(s==='All'?' active':'');b.textContent=s;
+  b.onclick=()=>{document.querySelectorAll('.stab').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderCities(s==='All'?null:s);};
+  tabsEl.appendChild(b);
+});
+
+function renderCities(sf){
+  const q=document.getElementById('citySearch').value.toLowerCase();
+  const maxV=318000;
+  const cities=cityData.filter(c=>(!sf||c.state===sf)&&(!q||c.name.toLowerCase().includes(q)||c.state.toLowerCase().includes(q)));
+  document.getElementById('cityGrid').innerHTML=cities.map(c=>{
+    const rel=v=>Math.round(v/c.ipc*100);
+    return `<div class="ccard" onclick="openAreaModal('${c.name}')">
+      <span class="rbadge r${c.risk.charAt(0)}">${c.risk}</span>
+      <div class="cname">${c.name}</div>
+      <div class="cstate">${c.state} · Safety ${c.score}/100 · Click for area breakdown ↗</div>
+      <div class="cstat-row">
+        <span class="cstat-name">Cyber</span>
+        <span class="cstat-pct" style="color:var(--cyan)">${rel(c.cyber)}%</span>
+        <div class="mbar-wrap"><div class="mbar-fill" style="width:${Math.round(c.cyber/maxV*100)}%;background:#4cc9f0;"></div></div>
+        <span class="cstat-raw">${(c.cyber/1000).toFixed(0)}K</span>
+      </div>
+      <div class="cstat-row">
+        <span class="cstat-name">Theft</span>
+        <span class="cstat-pct" style="color:var(--yellow)">${rel(c.theft)}%</span>
+        <div class="mbar-wrap"><div class="mbar-fill" style="width:${Math.round(c.theft/maxV*100)}%;background:#ffd166;"></div></div>
+        <span class="cstat-raw">${(c.theft/1000).toFixed(0)}K</span>
+      </div>
+      <div class="cstat-row">
+        <span class="cstat-name">Women</span>
+        <span class="cstat-pct" style="color:var(--acc)">${rel(c.women)}%</span>
+        <div class="mbar-wrap"><div class="mbar-fill" style="width:${Math.round(c.women/maxV*100)}%;background:#e84855;"></div></div>
+        <span class="cstat-raw">${(c.women/1000).toFixed(0)}K</span>
+      </div>
+      <div class="ccomment">${c.comment}</div>
+      <div class="click-hint">Click to see ${c.areas.length} area breakdowns ↗</div>
+    </div>`;
+  }).join('');
+}
+renderCities(null);
+function doSearch(){const active=document.querySelector('.stab.active');renderCities(active?.textContent==='All'?null:active?.textContent);}
+function resetDD(){document.getElementById('citySearch').value='';document.querySelectorAll('.stab').forEach((b,i)=>b.classList.toggle('active',i===0));renderCities(null);}
+
+// ── NEWS ──
+function renderNews(){
+  const arts=newsArticles.filter(a=>{
+    const mt=activeTF==='all'||a.tags.some(t=>t.includes(activeTF));
+    const mr=activeRF==='all'||a.region===activeRF||a.region==='all';
+    return mt&&mr;
+  });
+  document.getElementById('newsFeed').innerHTML=!arts.length?'<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;color:var(--muted);padding:2rem;text-align:center;">No matching articles</div>':
+    arts.map(a=>`<div class="ncard" onclick="window.open('${a.url}','_blank')">
+      <div class="nthumb"><img src="${a.img}" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex';"><div class="nthumb-fb" style="display:none;">📰</div></div>
+      <div class="nbody">
+        <div class="nbody-top"><span class="nstatus ns-${a.status}">● ${a.status}</span><span class="nsrc">${a.source} · ${a.time}</span></div>
+        <div class="ntitle">${a.title}</div>
+        <div class="ndesc">${a.desc}</div>
+        <div class="ntags">${a.tags.map(t=>`<span class="ntag">${t}</span>`).join('')}</div>
+      </div>
+    </div>`).join('');
+}
+function loadNews(){
+  const lo=document.getElementById('newsLoading');lo.style.display='flex';
+  setTimeout(()=>{lo.style.display='none';renderNews();document.getElementById('newsTs').textContent='Updated '+new Date().toLocaleTimeString('en-IN');},800);
+}
+function setTF(f,el){activeTF=f;document.querySelectorAll('#typeChips .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderNews();}
+function setRF(f,el){activeRF=f;document.querySelectorAll('#regChips .chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');renderNews();}
+loadNews();
+setInterval(loadNews,1800000);
+</script>
+</body>
+</html>
